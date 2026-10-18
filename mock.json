@@ -1,0 +1,22 @@
+{
+  "places": [
+    {
+      "id": "ChIJ_test_osny_001",
+      "displayName": { "text": "Plomberie Chauffage Morel & Fils" },
+      "formattedAddress": "14 Rue Aristide Briand, 95520 Osny, France",
+      "nationalPhoneNumber": "06 12 34 56 78",
+      "internationalPhoneNumber": "+33 6 12 34 56 78",
+      "rating": 4.8,
+      "userRatingCount": 42,
+      "googleMapsUri": "https://maps.google.com/?cid=123456789",
+      "reviews": [
+        {
+          "rating": 5,
+          "relativePublishTimeDescription": "il y a 2 semaines",
+          "text": { "text": "Intervention rapide et travail très soigné." },
+          "authorAttribution": { "displayName": "Marc L." }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+.env
+.env.*
+*.bak
+*.bak.*
+*.key
+*.pem
+__pycache__/
+venv/
+.venv/
+sites/
+_demo_requests/
+_quotes/
+config/secrets*

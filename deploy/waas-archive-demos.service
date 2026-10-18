@@ -1,0 +1,12 @@
+[Unit]
+Description=Archive expired ArtisanVisible demos (TTL)
+After=network.target
+
+[Service]
+Type=oneshot
+User=waas
+Group=waas
+WorkingDirectory=/opt/waas-factory
+EnvironmentFile=/opt/waas-factory/.env
+ExecStart=/opt/waas-factory/venv/bin/python /opt/waas-factory/scripts/archive_expired_demos.py
+Nice=10

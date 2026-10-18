@@ -1,0 +1,43 @@
+# Production Caddyfile — enable once real domains + DNS point at this VPS.
+# Do not invent domains. Replace api./demo. placeholders with real hostnames.
+# TEST deploy uses config/Caddyfile (HTTP :8080 beside Nginx on :80/:443).
+# Future: Nginx may relay unknown customer domains to this Caddy instance.
+
+{
+	on_demand_tls {
+		ask http://127.0.0.1:8000/api/check-domain
+	}
+}
+
+api.ton-domaine.fr {
+	reverse_proxy 127.0.0.1:8000
+}
+
+demo.ton-domaine.fr {
+	root * /var/www/sites
+
+	@forbidden {
+		path *.csv *.json *.tmp */.* */index.preview.html /*.* /*.*/*
+	}
+	respond @forbidden 404
+
+	file_server
+}
+
+:443 {
+	tls {
+		on_demand
+	}
+
+	@www header_regexp www Host ^www\.(.+)$
+	redir @www https://{re.www.1}{uri} 301
+
+	root * /var/www/sites/{host}
+
+	@forbidden {
+		path *.csv *.json *.tmp */.* /.* /index.preview.html
+	}
+	respond @forbidden 404
+
+	file_server
+}

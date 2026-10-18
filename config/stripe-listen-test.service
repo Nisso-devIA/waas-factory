@@ -1,0 +1,23 @@
+[Unit]
+Description=Stripe CLI listen (TEST) → ArtisanVisible webhook
+Documentation=https://stripe.com/docs/stripe-cli
+After=network-online.target waas-webhook.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=waas
+Group=waas
+WorkingDirectory=/opt/waas-factory
+EnvironmentFile=/opt/waas-factory/.env
+# Refuse to start unless a real TEST secret key is present (user pastes sk_test_…)
+ExecStartPre=/usr/bin/bash -c 'case "${STRIPE_SECRET_KEY}" in sk_test_*) exit 0;; *) echo "ERROR: STRIPE_SECRET_KEY must start with sk_test_ (paste your key in /opt/waas-factory/.env). Got prefix: ${STRIPE_SECRET_KEY:0:12}"; exit 1;; esac'
+# Forward directly to uvicorn (Caddy :8080 also proxies /webhook/* — either works; direct is simpler for CLI)
+ExecStart=/usr/bin/bash -c 'exec /usr/local/bin/stripe listen --api-key "${STRIPE_SECRET_KEY}" --events checkout.session.completed,checkout.session.async_payment_succeeded,checkout.session.async_payment_failed,invoice.payment_failed,customer.subscription.deleted,customer.subscription.updated --forward-to http://127.0.0.1:8000/webhook/stripe'
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

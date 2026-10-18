@@ -1,0 +1,57 @@
+# TEST Caddyfile — HTTP only on :8080 (beside Nginx on :80/:443).
+# No TLS / on_demand. No invented domains.
+# Production template: config/Caddyfile.prod
+# Future: activity domain may replace IP:8080; Nginx may relay unknown hosts → Caddy.
+# Vitrine: Astro static build deployed to /var/www/sites/_vitrine
+# Shared demo CSS/JS: /demo-assets/* (strict CSP — no Tailwind CDN)
+
+:8080 {
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8000
+	}
+	handle /webhook/* {
+		reverse_proxy 127.0.0.1:8000
+	}
+	handle /checkout/* {
+		reverse_proxy 127.0.0.1:8000
+	}
+	handle /upload/* {
+		reverse_proxy 127.0.0.1:8000
+	}
+
+	# Astro marketing + shared demo assets (CSS/JS for artisan sites & upload)
+	@vitrineAssets path /_astro/* /favicon.svg /favicon.ico /robots.txt /sitemap-index.xml /sitemap-0.xml /hero.webp /hero.avif /og.webp /fonts/* /demo-assets/* /demo-request.js
+	handle @vitrineAssets {
+		root * /var/www/sites/_vitrine
+		file_server
+	}
+
+	# Marketing vitrine pages — does not shadow /<slug>/ demos
+	@vitrine path / /index.html /merci-demo /merci-demo/ /merci-demo/*
+	handle @vitrine {
+		root * /var/www/sites/_vitrine
+		try_files {path} {path}/index.html /index.html
+		file_server
+	}
+
+	# Démos expirées : marqueur .expired → page 410 (FastAPI)
+	@expiredDemo {
+		path_regexp expired_slug ^/([a-z0-9][a-z0-9-]{0,80})(/.*)?$
+		file /var/www/sites/{re.expired_slug.1}/.expired
+	}
+	handle @expiredDemo {
+		rewrite * /api/demo-expired/{re.expired_slug.1}
+		reverse_proxy 127.0.0.1:8000
+	}
+
+	handle {
+		root * /var/www/sites
+
+		@forbidden {
+			path *.csv *.json *.tmp */.* */index.preview.html /*.* /*.*/*
+		}
+		respond @forbidden 404
+
+		file_server
+	}
+}
