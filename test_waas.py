@@ -1892,7 +1892,8 @@ class TestScratchCopyGuards(unittest.TestCase):
     def test_success_telegram_labels_grok_vs_secours(self):
         import demo_request as dr
 
-        self.assertEqual(dr.content_source_label("scratch-xai"), "Grok")
+        self.assertEqual(dr.content_source_label("scratch-xai"), "Grok (sur-mesure)")
+        self.assertEqual(dr.content_source_label("xai"), "Grok (gabarit)")
         self.assertEqual(
             dr.content_source_label("template-fallback:curated"),
             "secours (template)",
@@ -1903,7 +1904,7 @@ class TestScratchCopyGuards(unittest.TestCase):
             "",
             content_source="scratch-xai",
         )
-        self.assertIn("Source : Grok", text)
+        self.assertIn("Source : Grok (sur-mesure)", text)
         text2 = dr.format_success_text(
             {"company": "Test", "id": "r1"},
             "https://visibleartisan.fr/test/",

@@ -442,14 +442,16 @@ def format_generating_text(data: dict[str, Any], started_hhmm: str) -> str:
 
 
 def content_source_label(content_source: str | None) -> str:
-    """Human label for Telegram: Grok vs secours/template (never jargon)."""
+    """Human label for Telegram: distingue le sur-mesure Grok du gabarit/secours."""
     src = (content_source or "").strip().casefold()
     if not src:
         return "inconnu"
     if "template-fallback" in src or src.startswith("template"):
         return "secours (template)"
-    if "scratch" in src or src == "xai" or src.endswith(":xai"):
-        return "Grok"
+    if "scratch" in src:
+        return "Grok (sur-mesure)"
+    if src == "xai" or src.endswith(":xai"):
+        return "Grok (gabarit)"
     if src in ("curated", "fallback"):
         return "secours (template)"
     return content_source or "inconnu"
