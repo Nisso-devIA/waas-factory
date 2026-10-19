@@ -112,6 +112,7 @@ def format_admin_notification(
     desired_domain: str | None,
     conflict_owner: str | None,
     details: dict,
+    plan_label: str | None = None,
 ) -> str:
     phone = details.get("phone") or "Non renseigné"
     email = details.get("email") or "Non renseigné"
@@ -128,7 +129,7 @@ def format_admin_notification(
         domain_line = "`Aucun (à choisir avec set_domain.py)`"
 
     return (
-        f"🎉 **Nouveau client abonné (49€/mois) !**\n"
+        f"🎉 **Nouveau client abonné ({plan_label or '49€/mois'}) !**\n"
         f"• **Artisan :** `{name}` (`{slug}`)\n"
         f"• **Téléphone :** `{phone}` | **Email :** `{email}`\n"
         f"• **Domaine .fr demandé :** {domain_line}"
@@ -252,8 +253,9 @@ def _send_admin_notification(
     desired_domain: str | None,
     conflict_owner: str | None,
     details: dict,
+    plan_label: str | None = None,
 ) -> None:
-    msg = format_admin_notification(slug, registered_domain, desired_domain, conflict_owner, details)
+    msg = format_admin_notification(slug, registered_domain, desired_domain, conflict_owner, details, plan_label)
     _send_discord_webhook(msg)
     # Plain-ish text for WhatsApp / Telegram (drop heavy markdown stars)
     plain = (
@@ -271,6 +273,7 @@ def notify_admin_async(
     desired_domain: str | None,
     conflict_owner: str | None,
     details: dict,
+    plan_label: str | None = None,
 ) -> None:
     has_discord = bool(NOTIFY_WEBHOOK_URL)
     has_wa = bool(CALLMEBOT_PHONE and CALLMEBOT_APIKEY)
@@ -279,9 +282,28 @@ def notify_admin_async(
         return
     threading.Thread(
         target=_send_admin_notification,
-        args=(slug, registered_domain, desired_domain, conflict_owner, details),
+        args=(slug, registered_domain, desired_domain, conflict_owner, details, plan_label),
         daemon=True,
     ).start()
+
+
+def _plan_label_from_session(session_obj: dict) -> str | None:
+    """Libellé du plan pour la notif d'activation, depuis les metadata Stripe (palier + création)."""
+    meta = session_obj.get("metadata") or {}
+    tier_id = meta.get("tier")
+    if not tier_id:
+        return None  # ancien flux 49€ → libellé par défaut
+    tier = next((t for t in pricing.TIERS if t["id"] == tier_id), None)
+    parts = []
+    if tier:
+        parts.append(f"{tier['name']} {tier['price']}€/mois")
+    try:
+        cents = int(meta.get("creation_cents") or 0)
+        if cents > 0:
+            parts.append(f"création {cents // 100}€")
+    except (TypeError, ValueError):
+        pass
+    return " + ".join(parts) or None
 
 
 # --------------------------------------------------------------------------- #
@@ -508,7 +530,10 @@ def activate_site_files(site_dir: Path, session_obj: dict) -> str:
     log.info("Site activé : %s (subscription=%s, domain=%s)", slug, new_sub_id, registered_domain)
 
     # 6. Notification asynchrone non-bloquante
-    notify_admin_async(slug, registered_domain, desired_domain, conflict_owner, customer_details)
+    notify_admin_async(
+        slug, registered_domain, desired_domain, conflict_owner, customer_details,
+        _plan_label_from_session(session_obj),
+    )
     return "activated"
 
 
