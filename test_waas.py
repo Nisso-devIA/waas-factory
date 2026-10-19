@@ -2508,6 +2508,28 @@ class TestB28HeroStructureVariety(unittest.TestCase):
         errs = _validate_html(bad, check_claims=False)
         self.assertTrue(any("placeholder" in e for e in errs), errs)
 
+    def test_scratch_injects_devis_configurator(self):
+        """Le configurateur de devis doit être présent sur les sites scratch."""
+        from scratch_site import _inject_devis
+
+        doc = (
+            '<!DOCTYPE html><html lang="fr"><head></head><body>'
+            '<header class="hero"><h1>X</h1></header>'
+            '<section id="contact" class="av-contact"><h2>Contact</h2></section>'
+            "</body></html>"
+        )
+        out = _inject_devis(doc, "plomberie-test-95")
+        self.assertIn('data-plan-slug="plomberie-test-95"', out)
+        self.assertIn('id="devis"', out)
+        self.assertIn("/demo-assets/devis.js", out)
+        self.assertIn('id="va-form"', out)
+        # Configurateur placé AVANT le bloc contact
+        self.assertLess(out.index('id="devis"'), out.index('id="contact"'))
+        # Idempotent (pas de double injection) + slug vide = no-op
+        self.assertEqual(out.count('id="devis"'), 1)
+        self.assertEqual(_inject_devis(out, "x").count('id="devis"'), 1)
+        self.assertEqual(_inject_devis(doc, ""), doc)
+
 
 if __name__ == "__main__":
     unittest.main()

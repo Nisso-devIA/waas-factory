@@ -1287,6 +1287,42 @@ def _validate_html(html: str, *, check_claims: bool = True) -> list[str]:
     return errs
 
 
+def _inject_devis(doc: str, slug: str) -> str:
+    """Injecte le configurateur de devis (POST /api/quote/{slug}) sur les sites scratch.
+
+    Le chemin template pose déjà la section via render_page ; en scratch, _strip_dangerous
+    et le filtre ld+json retirent <form>/<script>. On ré-injecte donc la section APRÈS tous
+    ces nettoyages (et après la validation), on garantit <body data-plan-slug> (lu par
+    devis.js) et on mappe les couleurs --demo-* du template sur les --av-* du site.
+    """
+    if not slug or 'id="devis"' in doc.casefold():
+        return doc
+    try:
+        from demo_templates import DEVIS_SECTION_TEMPLATE
+    except Exception:  # noqa: BLE001
+        return doc
+    # devis.js lit le slug via document.body.dataset.planSlug
+    if "data-plan-slug" not in doc:
+        slug_attr = f' data-plan-slug="{html_lib.escape(slug, quote=True)}"'
+        doc = re.sub(r"(?i)<body\b", lambda m: m.group(0) + slug_attr, doc, count=1)
+    # Le template devis utilise --demo-* ; en scratch on expose --av-* → on les relie
+    bridge = (
+        '<style id="av-devis-bridge">.va-devis{'
+        "--demo-accent:var(--av-accent);--demo-ink:var(--av-ink);"
+        "--demo-paper:var(--av-paper);--demo-display:var(--av-font-display);}</style>"
+    )
+    section = bridge + DEVIS_SECTION_TEMPLATE
+    anchor = re.search(r'(?i)<section\b[^>]*\bid=["\']contact["\']', doc)
+    if anchor:
+        i = anchor.start()
+        return doc[:i] + section + "\n" + doc[i:]
+    m = re.search(r"(?i)</body\s*>", doc)
+    if m:
+        i = m.start()
+        return doc[:i] + section + "\n" + doc[i:]
+    return doc + section
+
+
 def _inject_platform(
     html: str,
     *,
@@ -1815,6 +1851,8 @@ def generate_scratch_html(
             e.startswith("duplicate") for e in _validate_html(doc, check_claims=False)
         ):
             errs = [e for e in errs if not e.startswith("duplicate")]
+        # Configurateur de devis — après strip/validation pour garder <form>/<script>
+        doc = _inject_devis(doc, slug)
         return doc, errs
 
     try:
