@@ -285,7 +285,15 @@ def do_validate(
         log.exception("Création du checkout devis échouée pour %s", slug)
         # On remet en 'pending' pour que l'admin puisse re-tenter
         mark_quote(qid, status="pending", validation_token=None)
-        return False, f"Échec Stripe : {str(e)[:150]}"
+        reason = f"Échec Stripe : {str(e)[:150]}"
+        # Prévenir l'admin sans retirer les boutons Valider/Refuser de la carte
+        cid = chat_id or data.get("telegram_chat_id") or dr.TELEGRAM_CHAT_ID
+        if cid:
+            dr.telegram_api(
+                "sendMessage",
+                {"chat_id": cid, "text": f"⚠️ Devis {qid} — {reason}. La carte reste active, vous pouvez re-valider."},
+            )
+        return False, reason
 
     updated = mark_quote(
         qid,

@@ -1045,8 +1045,11 @@ async def api_quote(slug: str, request: Request):
     if not SAFE_SLUG_RE.match(slug):
         raise HTTPException(status_code=400, detail="Identifiant de site invalide.")
 
+    import demo_limits
+
     peer = request.client.host if request.client else "unknown"
-    if not demo_request.check_rate_limit(f"quote:{peer}"):
+    ip = demo_limits.resolve_client_ip(request.headers, peer)  # vraie IP client derrière Caddy
+    if not demo_request.check_rate_limit(f"quote:{ip}"):
         raise HTTPException(status_code=429, detail="Trop de demandes — réessayez dans un instant.")
 
     try:
