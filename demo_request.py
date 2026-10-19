@@ -49,9 +49,9 @@ def _resolve_generate_timeout_s() -> int:
     Priorité :
       1. DEMO_GENERATE_TIMEOUT_S ou DEMO_GEN_TIMEOUT_SEC (override explicite)
       2. max(XAI_SCRATCH_PHASE2_TIMEOUT_S, XAI_SCRATCH_TIMEOUT_S) + marge (180 s)
-      3. défaut 600 s (10 min) — couvre phase2≈420 s + marge
+      3. défaut 780 s (13 min) — couvre phase2≈660 s + marge
 
-    Exemple VPS : phase2=420 → 420+180 = 600 s.
+    Exemple VPS : phase2=660 → 660+180 = 840 s.
     """
     for key in ("DEMO_GENERATE_TIMEOUT_S", "DEMO_GEN_TIMEOUT_SEC"):
         raw = (os.getenv(key) or "").strip()
@@ -65,13 +65,13 @@ def _resolve_generate_timeout_s() -> int:
     if phase_max > 0:
         margin = int((os.getenv("DEMO_GENERATE_TIMEOUT_MARGIN_S") or "180").strip() or "180")
         return phase_max + max(0, margin)
-    return 600
+    return 780
 
 
 # Max wait before marking génération as timed out (aligné scratch / phase2)
 GENERATE_TIMEOUT_S = _resolve_generate_timeout_s()
 # Hint admin affiché pendant la génération (pas le watchdog)
-GENERATE_ETA_HINT = (os.getenv("DEMO_GENERATE_ETA_HINT") or "≈4–7 min").strip() or "≈4–7 min"
+GENERATE_ETA_HINT = (os.getenv("DEMO_GENERATE_ETA_HINT") or "≈5–9 min").strip() or "≈5–9 min"
 try:
     ADMIN_TZ = ZoneInfo(os.getenv("DEMO_ADMIN_TZ", "Europe/Paris"))
 except Exception:  # noqa: BLE001 — tzdata manquant → UTC

@@ -339,9 +339,35 @@ TRADE_PALETTE_POOLS: dict[str, list[str]] = {
         "charcoal-lime",
         "ocean-foam",
     ],
-    "électricien": ["navy-mist", "graphite-amber", "charcoal-lime", "teal-sand"],
-    "paysagiste": ["forest-sand", "evergreen", "sage-porcelain", "teal-sand"],
-    "coach sportif": ["charcoal-lime", "slate-coral", "navy-mist", "graphite-amber"],
+    "électricien": [
+        "navy-mist",
+        "graphite-amber",
+        "charcoal-lime",
+        "teal-sand",
+        "ink-apricot",
+        "copper-linen",
+        "slate-coral",
+        "ember-ash",
+    ],
+    "paysagiste": [
+        "forest-sand",
+        "evergreen",
+        "sage-porcelain",
+        "teal-sand",
+        "ocean-foam",
+        "ink-brass",
+        "copper-linen",
+    ],
+    "coach sportif": [
+        "charcoal-lime",
+        "slate-coral",
+        "navy-mist",
+        "graphite-amber",
+        "ember-ash",
+        "teal-sand",
+        "evergreen",
+        "ink-apricot",
+    ],
     "coiffeur": ["slate-rose", "wine-cream", "berry-mist", "ink-apricot", "plum-fog"],
 }
 
@@ -408,9 +434,9 @@ TRADE_HERO_POOLS: dict[str, list[str]] = {
     "pâtisserie": list(HERO_STRUCTURES.keys()),
     "boulangerie": list(HERO_STRUCTURES.keys()),
     "plombier": list(HERO_STRUCTURES.keys()),
-    "électricien": ["fullbleed-photo", "split-photo-left", "type-led-band", "centered-editorial"],
+    "électricien": list(HERO_STRUCTURES.keys()),
     "paysagiste": list(HERO_STRUCTURES.keys()),
-    "coach sportif": ["split-photo-left", "fullbleed-photo", "type-led-band", "magazine-asymmetric"],
+    "coach sportif": list(HERO_STRUCTURES.keys()),
 }
 
 # Forced unique assignment for B-28 proof demos (same-trade never collide)
@@ -426,9 +452,9 @@ B28_HERO_FORCE: dict[str, str] = {
 TRADE_FONT_POOLS: dict[str, list[str]] = {
     "pâtisserie": ["fraunces-plex", "georgia-plex", "plex-only", "plex-narrow"],
     "plombier": ["plex-only", "plex-narrow", "fraunces-plex"],
-    "électricien": ["plex-only", "plex-narrow"],
-    "paysagiste": ["fraunces-plex", "georgia-plex", "plex-only"],
-    "coach sportif": ["plex-only", "plex-narrow", "fraunces-plex"],
+    "électricien": ["plex-only", "plex-narrow", "fraunces-plex", "georgia-plex"],
+    "paysagiste": ["fraunces-plex", "georgia-plex", "plex-only", "plex-narrow"],
+    "coach sportif": ["plex-only", "plex-narrow", "fraunces-plex", "georgia-plex"],
 }
 
 # Structure briefs per métier × variant index
@@ -474,6 +500,95 @@ STRUCTURE_VARIANTS: dict[str, list[str]] = {
         (
             "STRUCTURE D (plombier): 1) hero minimal ink 2) mosaïque 2 col photos "
             "3) liste dépannages 4) zone 5) FAQ 6) contact."
+        ),
+    ],
+    "boulangerie": [
+        (
+            "STRUCTURE A (boulangerie): 1) hero chaleureux (nom+ville+tél) "
+            "2) BANDEAU PRODUITS immédiat (pains, viennoiseries, spécialités) selon layout "
+            "3) le fournil / histoire courte 4) horaires + accès 5) FAQ EN DERNIER. "
+            "INTERDIT hero sombre + grille 3 col de 5 cartes."
+        ),
+        (
+            "STRUCTURE B (boulangerie): 1) hero éditorial split (photo pain doré dominante) "
+            "2) liste alternée spécialités (photo|texte) 3) savoir-faire / farines "
+            "4) horaires 5) contact 6) FAQ. INTERDIT clone dark-hero→3-col."
+        ),
+        (
+            "STRUCTURE C (boulangerie): 1) hero minimal papier clair, nom fort "
+            "2) mosaïque 2 col produits 3) commande/horaires mis en avant "
+            "4) zone 5) FAQ. INTERDIT cartes services génériques 3×."
+        ),
+    ],
+    "électricien": [
+        (
+            "STRUCTURE A (électricien): 1) hero pro + grand CTA tél "
+            "2) LISTE verticale de prestations (dépannage, mise aux normes, tableau, bornes) "
+            "3) interventions 4) zone 5) FAQ 6) contact. Pas de 3 cartes égales."
+        ),
+        (
+            "STRUCTURE B (électricien): 1) hero split photo|texte (installation/tableau) "
+            "2) 2 colonnes prestations 3) rassurance (devis clair, délais) "
+            "4) zone villes 5) FAQ 6) contact."
+        ),
+        (
+            "STRUCTURE C (électricien): 1) hero type-led (nom fort) + bandeau rassurance "
+            "2) services en liste 3) photo chantier réelle 4) zone 5) contact 6) FAQ."
+        ),
+        (
+            "STRUCTURE D (électricien): 1) hero minimal ink 2) liste dépannages urgents "
+            "3) garanties / certifications 4) zone 5) FAQ 6) contact."
+        ),
+    ],
+    "paysagiste": [
+        (
+            "STRUCTURE A (paysagiste): 1) hero photo jardin plein cadre (nom+ville) "
+            "2) BANDEAU RÉALISATIONS (création, entretien, élagage) selon layout "
+            "3) approche / engagement 4) zone 5) contact 6) FAQ. Pas de 3 cartes égales."
+        ),
+        (
+            "STRUCTURE B (paysagiste): 1) hero éditorial split (photo jardin) "
+            "2) liste alternée prestations par saison 3) zone 4) contact 5) FAQ."
+        ),
+        (
+            "STRUCTURE C (paysagiste): 1) hero clair végétal, nom fort "
+            "2) mosaïque 2 col réalisations (avant/après si dispo) 3) entretien annuel "
+            "4) zone 5) FAQ 6) contact."
+        ),
+    ],
+    "coach sportif": [
+        (
+            "STRUCTURE A (coach sportif): 1) hero dynamique (nom+promesse) + CTA séance "
+            "2) LISTE de programmes (perte de poids, prise de masse, remise en forme) "
+            "3) méthode 4) en ligne/à domicile/zone 5) FAQ 6) contact. Pas de 3 cartes égales."
+        ),
+        (
+            "STRUCTURE B (coach sportif): 1) hero split photo|texte énergique "
+            "2) 2 colonnes offres 3) approche / accompagnement "
+            "4) tarifs SI fournis sinon prestations 5) contact 6) FAQ."
+        ),
+        (
+            "STRUCTURE C (coach sportif): 1) hero type-led slogan fort "
+            "2) parcours en étapes (liste numérotée) 3) accompagnement "
+            "4) zone 5) FAQ 6) contact."
+        ),
+    ],
+    "coiffeur": [
+        (
+            "STRUCTURE A (coiffeur): 1) hero élégant (nom+ville) "
+            "2) BANDEAU PRESTATIONS (coupe, couleur, soins) selon layout "
+            "3) ambiance salon 4) horaires + prise de RDV 5) contact 6) FAQ. "
+            "Pas de 3 cartes égales."
+        ),
+        (
+            "STRUCTURE B (coiffeur): 1) hero éditorial split (photo coiffure) "
+            "2) liste alternée prestations 3) équipe / approche 4) horaires "
+            "5) contact 6) FAQ."
+        ),
+        (
+            "STRUCTURE C (coiffeur): 1) hero minimal clair, nom fort "
+            "2) mosaïque 2 col réalisations 3) tarifs SI fournis sinon prestations "
+            "4) horaires 5) zone 6) FAQ."
         ),
     ],
 }

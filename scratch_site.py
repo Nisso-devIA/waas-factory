@@ -46,7 +46,7 @@ log = logging.getLogger("scratch_site")
 XAI_API_URL = "https://api.x.ai/v1/chat/completions"
 # Wall-clock budget per xAI call (streaming uses this as overall deadline).
 # Phase 2 HTML often needs 3–6 min on grok-4.7 — keep generous defaults.
-SCRATCH_TIMEOUT_S = int(os.getenv("XAI_SCRATCH_TIMEOUT_S") or os.getenv("XAI_TIMEOUT_S") or "420")
+SCRATCH_TIMEOUT_S = int(os.getenv("XAI_SCRATCH_TIMEOUT_S") or os.getenv("XAI_TIMEOUT_S") or "600")
 SCRATCH_PHASE1_TIMEOUT_S = int(os.getenv("XAI_SCRATCH_PHASE1_TIMEOUT_S") or "150")
 SCRATCH_PHASE2_TIMEOUT_S = int(
     os.getenv("XAI_SCRATCH_PHASE2_TIMEOUT_S") or str(SCRATCH_TIMEOUT_S)
@@ -56,12 +56,12 @@ SCRATCH_PHASE2_TIMEOUT_S = int(
 SCRATCH_STREAM_IDLE_TIMEOUT_S = int(os.getenv("XAI_SCRATCH_STREAM_IDLE_TIMEOUT_S") or "200")
 SCRATCH_MAX_ATTEMPTS = int(os.getenv("XAI_SCRATCH_MAX_ATTEMPTS") or "1")  # HTTP tries per call
 SCRATCH_RETRY_BACKOFF_S = (2.0, 4.0)
-SCRATCH_PHASE2_MAX_TOKENS = int(os.getenv("XAI_SCRATCH_PHASE2_MAX_TOKENS") or "2800")
-SCRATCH_PHASE2_RETRY_MAX_TOKENS = int(os.getenv("XAI_SCRATCH_PHASE2_RETRY_MAX_TOKENS") or "2200")
-# Cap phase-1 CSS so phase-2 prompt stays compact (oversized CSS slows HTML gen).
-SCRATCH_CSS_MAX_CHARS = int(os.getenv("XAI_SCRATCH_CSS_MAX_CHARS") or "3200")
-# Whole-generation wall budget (~7 min target including retries).
-SCRATCH_TOTAL_BUDGET_S = int(os.getenv("XAI_SCRATCH_TOTAL_BUDGET_S") or "420")
+SCRATCH_PHASE2_MAX_TOKENS = int(os.getenv("XAI_SCRATCH_PHASE2_MAX_TOKENS") or "5000")
+SCRATCH_PHASE2_RETRY_MAX_TOKENS = int(os.getenv("XAI_SCRATCH_PHASE2_RETRY_MAX_TOKENS") or "4000")
+# Cap phase-1 CSS passed into the phase-2 prompt (richer design headroom).
+SCRATCH_CSS_MAX_CHARS = int(os.getenv("XAI_SCRATCH_CSS_MAX_CHARS") or "5000")
+# Whole-generation wall budget (~11 min target including retries).
+SCRATCH_TOTAL_BUDGET_S = int(os.getenv("XAI_SCRATCH_TOTAL_BUDGET_S") or "660")
 DEMO_ASSET_V = os.getenv("DEMO_ASSET_V") or "20261018w"
 
 # Short headings that are OK even if 1–2 words
@@ -1827,7 +1827,7 @@ def generate_scratch_html(
             "Polices: @font-face /demo-assets/fonts/"
             "ibm-plex-sans-latin-wght-normal.woff2 et fraunces-latin-wght-normal.woff2 "
             "ou Georgia/system-ui selon le preset. "
-            "Pas d'URL externes. Pas de JS. CSS ≤90 lignes et ≤2800 caractères. "
+            "Pas d'URL externes. Pas de JS. CSS riche et complète — jusqu'à ~180 lignes / ~5000 caractères. "
             "INTERDIT: styler le sélecteur bare `header{position:absolute;inset:...}` "
             "(casse les blocs plus bas). Utilise `.av-topnav` / `.hero-bar` full-width EN HAUT. "
             "INTERDIT nav flottante à mi-hero à côté d'une photo (bandeau vide). "
@@ -1864,7 +1864,7 @@ def generate_scratch_html(
                         {"role": "user", "content": design_user},
                     ],
                     temperature=0.75 if p1_try == 1 else 0.55,
-                    max_tokens=1100 if p1_try == 1 else 900,
+                    max_tokens=2000 if p1_try == 1 else 1600,
                     stream=False,
                     timeout_s=p1_timeout,
                 )
@@ -1903,29 +1903,30 @@ def generate_scratch_html(
             "(« Le métier est… », « Le lieu est… », « réalisé sur le terrain »…), "
             "JS, iframe, form, avis/notes/années/tarifs inventés, jargon opaque. "
             "Hero NOM + CTA tel:/#contact, sections utiles, FAQ, contact complet "
-            "(tél+ville+tel:), footer. Mobile-first ≥16px. COMPACT. "
+            "(tél+ville+tel:), footer. Mobile-first ≥16px. "
+            "Soigne les détails : espacements généreux, sections travaillées, rythme vertical varié. "
             "Respecte le layout preset (pas de grille 3 col incomplète). "
-            "Varie la structure — pas toujours hero→3 cartes→déroulé→zone→FAQ."
+            "Varie VRAIMENT la structure — pas toujours hero→3 cartes→déroulé→zone→FAQ."
         )
         html_system_compact = (
             "HTML vitrine artisan FR. UNIQUEMENT HTML5 ou <body>. "
             "CSS fourni tel quel. Photos listées 1× max, légendes = sujet. "
             "Ton naturel. Pas de JS/avis inventés/jargon. "
-            "Hero+tél, 4–5 sections, FAQ, contact, footer. COMPACT <2200 tokens."
+            "Hero+tél, sections utiles et complètes, FAQ, contact, footer. Reste complet (pas de version tronquée)."
         )
 
         def _html_user(css: str, *, compact: bool = False) -> str:
-            css_slice = css[:2200] if compact else css[:SCRATCH_CSS_MAX_CHARS]
-            struct_part = (struct[:280] + "…") if compact and len(struct) > 280 else struct
+            css_slice = css[:3600] if compact else css[:SCRATCH_CSS_MAX_CHARS]
+            struct_part = (struct[:500] + "…") if compact and len(struct) > 500 else struct
             return (
                 f"Entreprise: {name}\nMétier: {trade}\nVille: {city}\n"
                 f"Adresse: {address or city}\n"
                 f"Tél: {phone_display or '(non fourni)'}\n"
-                f"Direction: {design['mood'][:80]} | {design['layout'][:80]}\n"
+                f"Direction: {design['mood'][:400]} | {design['layout'][:400]}\n"
                 f"{struct_part}\n"
                 f"Photos:\n{photos_txt}\n\n"
                 f"CSS:\n```css\n{css_slice}\n```\n"
-                "HTML maintenant — chaleureux, structure distincte, compact."
+                "HTML maintenant — chaleureux, structure distincte et soignée."
             )
 
         html_user = _html_user(design["css"], compact=False)
