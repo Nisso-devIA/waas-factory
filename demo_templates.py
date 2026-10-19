@@ -405,6 +405,179 @@ def _sec_final_cta(plan: SitePlan, *, tel: str, phone_display: str, maps: str, a
   </section>"""
 
 
+# --------------------------------------------------------------------------- #
+# Section devis (configurateur sur mesure) — auto-stylée, POST /api/quote/{slug}
+# Reprend la grille de pricing.py ; l'estimation client est cosmétique, le serveur
+# recalcule et fait foi. {{SLUG}} est injecté par _sec_devis().
+# --------------------------------------------------------------------------- #
+DEVIS_SECTION_TEMPLATE = """
+<section class="va-devis" id="devis">
+  <style>
+  .va-devis{--va-accent:var(--demo-accent,#0f7a56);--va-ink:var(--demo-ink,#16241d);--va-paper:var(--demo-paper,#f6f7f4);--va-line:rgba(20,35,28,.14);--va-soft:rgba(20,35,28,.04);background:var(--va-paper);color:var(--va-ink);padding:60px 20px;font-family:inherit}
+  .va-devis *{box-sizing:border-box}
+  .va-devis .va-wrap{max-width:820px;margin:0 auto}
+  .va-devis .va-head{text-align:center;margin-bottom:26px}
+  .va-devis .va-eyebrow{text-transform:uppercase;letter-spacing:.14em;font-size:12px;font-weight:700;color:var(--va-accent);margin:0 0 8px}
+  .va-devis h2{font-size:clamp(24px,4vw,34px);margin:0 0 10px;font-family:var(--demo-display,inherit)}
+  .va-devis .va-sub{max-width:52ch;margin:0 auto;opacity:.75;font-size:15px}
+  .va-devis .va-block{border:0;padding:0;margin:0 0 22px;min-width:0}
+  .va-devis legend{font-weight:700;font-size:15px;margin-bottom:10px;padding:0}
+  .va-devis .va-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .va-devis .va-grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .va-devis .va-grid-opts{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  @media(max-width:560px){.va-devis .va-grid-2,.va-devis .va-grid-3,.va-devis .va-grid-opts{grid-template-columns:1fr}}
+  .va-devis label{cursor:pointer}
+  .va-devis input{position:absolute;opacity:0;width:0;height:0}
+  .va-devis .va-card{display:flex;flex-direction:column;gap:2px;border:1.5px solid var(--va-line);border-radius:12px;padding:14px;background:#fff;transition:border-color .15s,box-shadow .15s}
+  .va-devis .va-card:has(input:checked){border-color:var(--va-accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--va-accent) 18%,transparent)}
+  .va-devis .va-card-t{font-weight:700}
+  .va-devis .va-card-d{font-size:13px;opacity:.65}
+  .va-devis .va-opt{display:flex;align-items:center;gap:10px;border:1.5px solid var(--va-line);border-radius:10px;padding:11px 13px;background:#fff;transition:border-color .15s,background .15s;min-width:0}
+  .va-devis .va-opt:has(input:checked){border-color:var(--va-accent);background:var(--va-soft)}
+  .va-devis .va-ck{width:20px;height:20px;border:1.5px solid var(--va-line);border-radius:6px;flex:none;position:relative}
+  .va-devis .va-opt:has(input:checked) .va-ck{background:var(--va-accent);border-color:var(--va-accent)}
+  .va-devis .va-opt:has(input:checked) .va-ck::after{content:"";position:absolute;left:6px;top:2px;width:5px;height:10px;border:2px solid #fff;border-top:0;border-left:0;transform:rotate(45deg)}
+  .va-devis .va-opt-n{flex:1;font-size:14px;font-weight:500;min-width:0}
+  .va-devis .va-opt-p{font-size:13px;font-weight:700;color:var(--va-accent);white-space:nowrap}
+  .va-devis .va-lang{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:10px;padding:10px 13px;background:var(--va-soft);border-radius:10px;font-size:14px;font-weight:600}
+  .va-devis .va-lang[hidden]{display:none}
+  .va-devis .va-step{display:inline-flex;align-items:center;gap:4px}
+  .va-devis .va-step button{width:30px;height:30px;border:1px solid var(--va-line);background:#fff;border-radius:8px;font-size:18px;cursor:pointer;line-height:1}
+  .va-devis .va-step b{min-width:28px;text-align:center;font-variant-numeric:tabular-nums}
+  .va-devis .va-tier{display:flex;flex-direction:column;gap:4px;border:1.5px solid var(--va-line);border-radius:12px;padding:13px;background:#fff;transition:border-color .15s,box-shadow .15s}
+  .va-devis .va-tier:has(input:checked){border-color:var(--va-accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--va-accent) 18%,transparent)}
+  .va-devis .va-tier-n{font-weight:700;font-size:14px}
+  .va-devis .va-tier-n i{font-style:normal;font-size:10px;text-transform:uppercase;letter-spacing:.05em;background:var(--va-accent);color:#fff;padding:2px 6px;border-radius:5px;margin-left:4px}
+  .va-devis .va-tier-p{font-weight:800;font-size:18px}
+  .va-devis .va-tier-p small{font-size:11px;font-weight:500;opacity:.6}
+  .va-devis .va-estimate{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;background:#fff;border:1.5px solid var(--va-accent);border-radius:12px;padding:14px 16px;margin:4px 0 16px}
+  .va-devis .va-est-lbl{font-size:12px;text-transform:uppercase;letter-spacing:.08em;opacity:.6;display:block}
+  .va-devis .va-est-note{font-weight:700}
+  .va-devis .va-est-val{font-size:15px;font-variant-numeric:tabular-nums}
+  .va-devis .va-est-val b{font-size:22px;font-family:var(--demo-display,inherit)}
+  .va-devis .va-est-val small{opacity:.6}
+  .va-devis .va-btn{display:block;width:100%;border:0;border-radius:12px;background:var(--va-accent);color:#fff;font-size:16px;font-weight:700;padding:15px;cursor:pointer;font-family:inherit}
+  .va-devis .va-btn:disabled{opacity:.6;cursor:default}
+  .va-devis .va-fine{text-align:center;font-size:12px;opacity:.6;margin:10px 0 0}
+  .va-devis .va-success{display:none;text-align:center;background:#fff;border:1.5px solid var(--va-accent);border-radius:16px;padding:40px 24px;max-width:520px;margin:0 auto}
+  .va-devis .va-check{width:54px;height:54px;border-radius:50%;background:var(--va-accent);color:#fff;font-size:28px;display:flex;align-items:center;justify-content:center;margin:0 auto 14px}
+  .va-devis .va-success h3{margin:0 0 8px;font-size:22px}
+  .va-devis .va-success p{margin:0;opacity:.75}
+  </style>
+  <div class="va-wrap">
+    <div class="va-head">
+      <p class="va-eyebrow">Votre site, en ligne</p>
+      <h2>Configurez votre projet</h2>
+      <p class="va-sub">Choisissez votre formule et vos options. On vous recontacte avec un devis précis et le lien d'activation.</p>
+    </div>
+    <form class="va-form" id="va-form">
+      <fieldset class="va-block">
+        <legend>Formule</legend>
+        <div class="va-grid-2">
+          <label class="va-card"><input type="radio" name="type" value="vitrine" checked><span class="va-card-t">Site vitrine</span><span class="va-card-d">Comme cet aperçu</span></label>
+          <label class="va-card"><input type="radio" name="type" value="ecom"><span class="va-card-t">Boutique en ligne</span><span class="va-card-d">Vente en ligne</span></label>
+        </div>
+      </fieldset>
+      <fieldset class="va-block">
+        <legend>Options</legend>
+        <div class="va-grid-opts" id="va-opts"></div>
+        <div class="va-lang" id="va-lang" hidden>
+          <span>Nombre de langues</span>
+          <span class="va-step"><button type="button" data-d="-1" aria-label="moins">-</button><b id="va-langv">2</b><button type="button" data-d="1" aria-label="plus">+</button></span>
+        </div>
+      </fieldset>
+      <fieldset class="va-block">
+        <legend>Abonnement mensuel</legend>
+        <div class="va-grid-3" id="va-tiers"></div>
+      </fieldset>
+      <div class="va-estimate">
+        <div><span class="va-est-lbl">Estimation</span><span class="va-est-note" id="va-level">-</span></div>
+        <div class="va-est-val"><b id="va-creation">-</b> <small>creation</small> &middot; <b id="va-monthly">-</b><small>/mois</small></div>
+      </div>
+      <button type="submit" class="va-btn" id="va-submit">Demander mon devis</button>
+      <p class="va-fine">Devis sans engagement. Montants indicatifs, confirmes avant tout paiement.</p>
+    </form>
+    <div class="va-success" id="va-success">
+      <div class="va-check">&#10003;</div>
+      <h3>Devis envoye !</h3>
+      <p>Merci, nous revenons vers vous tres vite avec le lien d'activation securise.</p>
+    </div>
+  </div>
+  <script>
+  (function(){
+    var root=document.getElementById('va-form'); if(!root) return;
+    var SLUG="{{SLUG}}";
+    var fmt=new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR',maximumFractionDigits:0});
+    var T={vitrine:{price:890,pagesIncl:5,score:2,minTier:2},ecom:{price:2490,pagesIncl:8,score:5,minTier:2}};
+    var OPTS=[
+      {id:'rdv',name:'Prise de rendez-vous',price:250,score:2,minTier:2},
+      {id:'blog',name:'Blog / actualites',price:200,score:2,minTier:2},
+      {id:'galerie',name:'Galerie / realisations',price:150,score:1,minTier:1},
+      {id:'form',name:'Formulaire avance',price:120,score:1,minTier:1},
+      {id:'avis',name:'Avis Google',price:90,score:1,minTier:2},
+      {id:'multi',name:'Multilingue',price:300,score:2,minTier:2,qty:'lang'},
+      {id:'espace',name:'Espace client',price:400,score:3,minTier:3},
+      {id:'redac',name:'Redaction des contenus',price:60,score:1,minTier:1,qty:'pages'},
+      {id:'logo',name:'Logo & identite',price:350,score:1,minTier:1},
+      {id:'photos',name:'Visuels premium',price:120,score:1,minTier:1}
+    ];
+    var TIERS=[{id:'essentiel',name:'Essentiel',price:29},{id:'visibilite',name:'Visibilite',price:49},{id:'croissance',name:'Croissance',price:99}];
+    var LEVELS=[[3,'Simple'],[7,'Standard'],[12,'Avance'],[1e9,'Premium']];
+    var langs=2;
+    document.getElementById('va-opts').innerHTML=OPTS.map(function(o){
+      var suf=o.qty==='lang'?'/langue':(o.qty==='pages'?'/page':'');
+      return '<label class="va-opt"><input type="checkbox" value="'+o.id+'"><span class="va-ck"></span><span class="va-opt-n">'+o.name+'</span><span class="va-opt-p">+'+fmt.format(o.price)+suf+'</span></label>';
+    }).join('');
+    document.getElementById('va-tiers').innerHTML=TIERS.map(function(t){
+      var tag=t.id==='visibilite'?' <i>conseille</i>':'';
+      return '<label class="va-tier"><input type="radio" name="tier" value="'+t.id+'"'+(t.id==='visibilite'?' checked':'')+'><span class="va-tier-n">'+t.name+tag+'</span><span class="va-tier-p">'+fmt.format(t.price)+'<small>/mois</small></span></label>';
+    }).join('');
+    function sel(){
+      var type=(root.querySelector('input[name=type]:checked')||{}).value||'vitrine';
+      var opts={}; root.querySelectorAll('#va-opts input:checked').forEach(function(i){opts[i.value]=true;});
+      var tier=(root.querySelector('input[name=tier]:checked')||{}).value||'visibilite';
+      return {type:type,options:opts,langs:langs,tier:tier,billing:'mensuel'};
+    }
+    function compute(){
+      var s=sel(),ty=T[s.type],creation=ty.price,score=ty.score,minTier=ty.minTier,pages=ty.pagesIncl;
+      OPTS.forEach(function(o){ if(!s.options[o.id])return; var c=o.price; if(o.qty==='pages')c=o.price*pages; if(o.qty==='lang')c=o.price*langs; creation+=c; score+=o.score; if(o.minTier>minTier)minTier=o.minTier; });
+      var level='Premium'; for(var i=0;i<LEVELS.length;i++){ if(score<=LEVELS[i][0]){level=LEVELS[i][1];break;} }
+      var chosen=TIERS.filter(function(t){return t.id===s.tier;})[0]||TIERS[1];
+      return {creation:creation,monthly:chosen.price,level:level};
+    }
+    function refresh(){
+      var r=compute();
+      document.getElementById('va-creation').textContent=fmt.format(r.creation);
+      document.getElementById('va-monthly').textContent=fmt.format(r.monthly);
+      document.getElementById('va-level').textContent='Niveau '+r.level;
+      document.getElementById('va-lang').hidden=!root.querySelector('#va-opts input[value=multi]:checked');
+    }
+    root.addEventListener('change',refresh);
+    document.getElementById('va-lang').addEventListener('click',function(e){
+      var b=e.target.closest('button[data-d]'); if(!b)return;
+      langs=Math.max(2,Math.min(5,langs+parseInt(b.getAttribute('data-d'),10)));
+      document.getElementById('va-langv').textContent=langs; refresh();
+    });
+    refresh();
+    root.addEventListener('submit',function(e){
+      e.preventDefault();
+      var btn=document.getElementById('va-submit'); btn.disabled=true; btn.textContent='Envoi...';
+      fetch('/api/quote/'+encodeURIComponent(SLUG),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(sel())})
+        .then(function(res){ if(!res.ok) throw new Error('http'); return res.json(); })
+        .then(function(){ root.style.display='none'; document.getElementById('va-success').style.display='block'; })
+        .catch(function(){ btn.disabled=false; btn.textContent='Demander mon devis'; alert('Un souci est survenu, reessayez dans un instant.'); });
+    });
+  })();
+  </script>
+</section>
+"""
+
+
+def _sec_devis(plan: SitePlan, esc) -> str:
+    """Configurateur de devis, injecté dans la démo (POST /api/quote/{slug})."""
+    return DEVIS_SECTION_TEMPLATE.replace("{{SLUG}}", esc(plan.slug))
+
+
 _SECTION_RENDERERS = {
     "flagship_split": lambda plan, esc, **kw: _sec_flagship(plan, esc),
     "services_numbered": lambda plan, esc, **kw: _sec_services_numbered(plan, esc),
@@ -416,6 +589,7 @@ _SECTION_RENDERERS = {
     "faq": lambda plan, esc, **kw: _sec_faq(plan, esc),
     "gallery": lambda plan, esc, **kw: _sec_gallery(plan, esc),
     "final_cta": lambda plan, esc, **kw: _sec_final_cta(plan, esc=esc, **kw),
+    "devis": lambda plan, esc, **kw: _sec_devis(plan, esc),
 }
 
 
@@ -467,6 +641,10 @@ def render_page(
     # If plan forgot services entirely, inject numbered
     if not seen_prestations:
         sections_html.insert(0, _sec_services_numbered(plan, esc))
+
+    # Section devis (configurateur) — toujours présente, même si le plan ne l'ordonne pas
+    if "devis" not in plan.section_order:
+        sections_html.append(_sec_devis(plan, esc))
 
     body_sections = "\n".join(sections_html)
     if reviews_section:
