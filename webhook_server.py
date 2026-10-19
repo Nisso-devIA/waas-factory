@@ -29,6 +29,8 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 import demo_request
 import photo_upload
+import pricing
+import quote_request
 
 log = logging.getLogger("webhook_server")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -38,6 +40,10 @@ app = FastAPI(title="WaaS Checkout & Webhook Server")
 SITES_DIR = Path(os.getenv("SITES_DIR", "/var/www/sites")).resolve()
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY", "")
 STRIPE_PRICE_ID = os.getenv("STRIPE_PRICE_ID", "")
+# Prix récurrents par palier (devis). Visibilité réutilise STRIPE_PRICE_ID (offre 49€) si non défini.
+STRIPE_PRICE_ESSENTIEL = os.getenv("STRIPE_PRICE_ESSENTIEL", "").strip()
+STRIPE_PRICE_VISIBILITE = os.getenv("STRIPE_PRICE_VISIBILITE", "").strip()
+STRIPE_PRICE_CROISSANCE = os.getenv("STRIPE_PRICE_CROISSANCE", "").strip()
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
 STRIPE_REQUIRE_TOS = os.getenv("STRIPE_REQUIRE_TOS", "").lower() in ("1", "true", "yes")
 SUCCESS_URL = os.getenv("STRIPE_SUCCESS_URL", "https://demo.example.fr/merci")
@@ -75,6 +81,12 @@ demo_request.DEMO_REQUESTS_DIR = Path(
 demo_request.TELEGRAM_BOT_TOKEN = TELEGRAM_BOT_TOKEN
 demo_request.TELEGRAM_CHAT_ID = TELEGRAM_CHAT_ID
 demo_request.TELEGRAM_WEBHOOK_SECRET = TELEGRAM_WEBHOOK_SECRET
+
+# Keep quote_request module config in sync
+quote_request.SITES_DIR = SITES_DIR
+quote_request.QUOTES_DIR = Path(
+    os.getenv("QUOTES_DIR") or (SITES_DIR / "_quotes")
+).resolve()
 
 
 SAFE_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,80}$")
@@ -187,7 +199,8 @@ def send_callmebot_whatsapp(text: str, timeout: float = 8.0) -> int | None:
 def _send_discord_webhook(msg: str) -> None:
     if not NOTIFY_WEBHOOK_URL:
         return
-    payload = json.dumps({"content": msg, "text": msg}).encode("utf-8")
+    # allowed_mentions:{parse:[]} → un nom client type "@everyone" ne peut pas pinguer le canal admin.
+    payload = json.dumps({"content": msg, "text": msg, "allowed_mentions": {"parse": []}}).encode("utf-8")
     req = urllib.request.Request(
         NOTIFY_WEBHOOK_URL,
         data=payload,
@@ -382,23 +395,36 @@ def activate_site_files(site_dir: Path, session_obj: dict) -> str:
     new_sub_id = session_obj.get("subscription")
     act_file = site_dir / ".activated"
 
-    # 1. Protection contre les doubles abonnements
+    # 1. Idempotence + protection contre les doubles abonnements
     if act_file.exists():
         try:
             existing = json.loads(act_file.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             existing = {}
         existing_sub_id = existing.get("stripe_subscription_id")
+        # (a) Déjà activé avec CE MÊME abonnement → événement Stripe redélivré : idempotent,
+        #     aucun effet de bord répété (pas de re-notification, pas de timestamp réécrit).
+        if existing_sub_id and new_sub_id and existing_sub_id == new_sub_id:
+            log.info("Site %s déjà activé pour l'abonnement %s — événement redélivré ignoré", slug, new_sub_id)
+            return "already_active"
+        # (b) Abonnement DIFFÉRENT → vrai doublon : on garde l'existant et on annule le nouveau.
         if existing_sub_id and new_sub_id and existing_sub_id != new_sub_id:
             log.warning(
                 "Double abonnement détecté pour %s : conservation de %s, annulation du doublon %s",
                 slug, existing_sub_id, new_sub_id,
             )
-            if stripe.api_key:
-                try:
-                    stripe.Subscription.cancel(new_sub_id)
-                except Exception as e:  # noqa: BLE001
-                    log.error("Échec de l'annulation automatique du doublon %s : %s", new_sub_id, e)
+            if not stripe.api_key:
+                # Impossible d'annuler → ne PAS répondre 200 : laisser Stripe redélivrer.
+                raise HTTPException(status_code=503, detail="Annulation du doublon impossible (Stripe non configuré)")
+            try:
+                stripe.Subscription.cancel(new_sub_id)
+            except Exception as e:  # noqa: BLE001
+                log.error("Échec de l'annulation automatique du doublon %s : %s", new_sub_id, e)
+                # Erreur transitoire : renvoyer non-2xx pour que Stripe réessaie,
+                # sinon l'abonnement fantôme reste actif et facture le client dans le vide.
+                raise HTTPException(
+                    status_code=503, detail="Échec annulation doublon — nouvelle tentative requise"
+                ) from e
             return "duplicate_cancelled"
 
     # 2. Sauvegarde atomique de l'aperçu démo et nettoyage de index.html
@@ -524,45 +550,73 @@ def deactivate_site_files(site_dir: Path, reason: str) -> None:
 # --------------------------------------------------------------------------- #
 # Endpoints FastAPI
 # --------------------------------------------------------------------------- #
-@app.get("/checkout/{slug}")
-def create_checkout_session(slug: str, customer: str | None = None):
-    site_dir = resolve_site_dir(slug)
+def _resolve_tier_price_id(tier: dict) -> str:
+    """price_id Stripe du palier. Visibilité réutilise STRIPE_PRICE_ID (49€) si non défini."""
+    mapping = {
+        "STRIPE_PRICE_ESSENTIEL": STRIPE_PRICE_ESSENTIEL,
+        "STRIPE_PRICE_VISIBILITE": STRIPE_PRICE_VISIBILITE or STRIPE_PRICE_ID,
+        "STRIPE_PRICE_CROISSANCE": STRIPE_PRICE_CROISSANCE,
+    }
+    return mapping.get((tier or {}).get("stripe_env", ""), "")
 
-    if (site_dir / ".activated").exists():
-        meta_path = site_dir / "meta.json"
-        if meta_path.exists():
-            meta = json.loads(meta_path.read_text(encoding="utf-8"))
-            if meta.get("preview_url"):
-                return RedirectResponse(url=meta["preview_url"], status_code=303)
-        return HTMLResponse("Ce site est déjà actif.", status_code=200)
 
-    meta_path = site_dir / "meta.json"
-    meta = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.exists() else {}
-
-    # Démo expirée : refuser l'activation 49€
-    try:
-        import demo_ttl
-
-        if demo_ttl.is_expired(meta, site_dir):
-            return HTMLResponse(
-                demo_ttl.expired_page_html(),
-                status_code=410,
-                headers={"X-Robots-Tag": "noindex, nofollow"},
-            )
-    except Exception as e:  # noqa: BLE001
-        log.warning("Contrôle TTL checkout échoué pour %s : %s", slug, e)
-
-    if not stripe.api_key or not STRIPE_PRICE_ID:
+def _build_checkout_session(
+    slug: str,
+    site_dir: Path,
+    meta: dict,
+    *,
+    quote: dict | None = None,
+    customer: str | None = None,
+):
+    """
+    Construit la session Stripe Checkout (mode subscription) et la renvoie.
+    - Avec un devis (meta['quote'] ou `quote`) : prix du palier + frais de création one-shot.
+    - Sinon : offre 49€ legacy (STRIPE_PRICE_ID).
+    """
+    if not stripe.api_key:
         raise HTTPException(status_code=500, detail="Configuration Stripe incomplète sur le serveur.")
+
+    if quote is None and isinstance(meta.get("quote"), dict):
+        quote = meta["quote"]
 
     business_name = meta.get("name", slug)[:450]
     place_id = meta.get("place_id", "")
     preview_url = meta.get("preview_url", CANCEL_URL)
-
     stripe_meta = {"slug": slug, "place_id": place_id, "business_name": business_name}
+
+    if quote:
+        tier = quote.get("tier") or {}
+        price_id = _resolve_tier_price_id(tier)
+        if not price_id:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Prix Stripe manquant pour le palier « {tier.get('id')} ».",
+            )
+        line_items: list[dict] = [{"price": price_id, "quantity": 1}]
+        creation_cents = int(quote.get("creation_cents") or 0)
+        if creation_cents > 0:
+            # Frais de création one-shot (montant variable) : price_data sans 'recurring'
+            # => facturé une seule fois, sur la 1re facture de l'abonnement (panier mixte Stripe).
+            line_items.append(
+                {
+                    "price_data": {
+                        "currency": "eur",
+                        "product_data": {"name": f"Création du site — {quote.get('level', 'sur mesure')}"},
+                        "unit_amount": creation_cents,
+                    },
+                    "quantity": 1,
+                }
+            )
+        stripe_meta["tier"] = tier.get("id", "")
+        stripe_meta["creation_cents"] = str(creation_cents)
+    else:
+        if not STRIPE_PRICE_ID:
+            raise HTTPException(status_code=500, detail="Configuration Stripe incomplète sur le serveur.")
+        line_items = [{"price": STRIPE_PRICE_ID, "quantity": 1}]
+
     checkout_kwargs: dict = {
         "mode": "subscription",
-        "line_items": [{"price": STRIPE_PRICE_ID, "quantity": 1}],
+        "line_items": line_items,
         "client_reference_id": slug,
         "metadata": stripe_meta,
         "subscription_data": {"metadata": stripe_meta},
@@ -588,11 +642,50 @@ def create_checkout_session(slug: str, customer: str | None = None):
         checkout_kwargs["customer"] = customer
 
     try:
-        sess = stripe.checkout.Session.create(**checkout_kwargs)
+        return stripe.checkout.Session.create(**checkout_kwargs)
     except stripe.StripeError as e:
         log.error("Erreur Stripe pour %s : %s", slug, e)
         raise HTTPException(status_code=502, detail="Impossible d'initialiser le paiement Stripe.") from e
 
+
+def build_quote_checkout_url(slug: str, quote: dict) -> str:
+    """Builder injecté dans quote_request : crée la session Checkout d'un devis validé, renvoie son URL."""
+    site_dir = resolve_site_dir(slug)
+    meta_path = site_dir / "meta.json"
+    meta = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.exists() else {}
+    sess = _build_checkout_session(slug, site_dir, meta, quote=quote)
+    return sess.url
+
+
+@app.get("/checkout/{slug}")
+def create_checkout_session(slug: str, customer: str | None = None):
+    site_dir = resolve_site_dir(slug)
+
+    if (site_dir / ".activated").exists():
+        meta_path = site_dir / "meta.json"
+        if meta_path.exists():
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            if meta.get("preview_url"):
+                return RedirectResponse(url=meta["preview_url"], status_code=303)
+        return HTMLResponse("Ce site est déjà actif.", status_code=200)
+
+    meta_path = site_dir / "meta.json"
+    meta = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.exists() else {}
+
+    # Démo expirée : refuser l'activation
+    try:
+        import demo_ttl
+
+        if demo_ttl.is_expired(meta, site_dir):
+            return HTMLResponse(
+                demo_ttl.expired_page_html(),
+                status_code=410,
+                headers={"X-Robots-Tag": "noindex, nofollow"},
+            )
+    except Exception as e:  # noqa: BLE001
+        log.warning("Contrôle TTL checkout échoué pour %s : %s", slug, e)
+
+    sess = _build_checkout_session(slug, site_dir, meta, customer=customer)
     return RedirectResponse(url=sess.url, status_code=303)
 
 
@@ -942,6 +1035,49 @@ async def api_demo_request(request: Request):
     )
 
 
+@app.post("/api/quote/{slug}")
+async def api_quote(slug: str, request: Request):
+    """
+    L'artisan envoie sa config de devis depuis la démo. Le prix est RECALCULÉ serveur
+    (pricing.py), un devis 'pending' est créé, et l'admin reçoit la carte Telegram
+    [Valider | Refuser]. Le client ne reçoit le lien de paiement qu'après validation.
+    """
+    if not SAFE_SLUG_RE.match(slug):
+        raise HTTPException(status_code=400, detail="Identifiant de site invalide.")
+
+    peer = request.client.host if request.client else "unknown"
+    if not demo_request.check_rate_limit(f"quote:{peer}"):
+        raise HTTPException(status_code=429, detail="Trop de demandes — réessayez dans un instant.")
+
+    try:
+        raw = await request.json()
+    except Exception:  # noqa: BLE001
+        try:
+            form = await request.form()
+            raw = dict(form)
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(status_code=400, detail="Corps JSON requis") from e
+    if not isinstance(raw, dict):
+        raise HTTPException(status_code=400, detail="Payload invalide")
+
+    try:
+        data = quote_request.create_pending_quote(slug, raw)
+    except pricing.QuoteError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+    threading.Thread(target=quote_request.send_quote_alert, args=(data,), daemon=True).start()
+    return JSONResponse(
+        {
+            "status": "ok",
+            "id": data["id"],
+            "message": "Votre devis a été envoyé. Vous recevrez le lien de paiement après validation.",
+        },
+        status_code=201,
+    )
+
+
 @app.post("/webhook/telegram")
 async def telegram_webhook(request: Request):
     """
@@ -960,6 +1096,11 @@ async def telegram_webhook(request: Request):
 
     if not isinstance(update, dict):
         raise HTTPException(status_code=400, detail="Update invalide")
+
+    # Devis d'abord (callbacks quote:*), puis démo (demo:*)
+    quote_result = quote_request.process_quote_callback(update, build_checkout=build_quote_checkout_url)
+    if quote_result is not None:
+        return {"ok": True, "result": quote_result}
 
     result = demo_request.process_telegram_update(update)
     return {"ok": True, "result": result}
