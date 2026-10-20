@@ -65,13 +65,13 @@ def _resolve_generate_timeout_s() -> int:
     if phase_max > 0:
         margin = int((os.getenv("DEMO_GENERATE_TIMEOUT_MARGIN_S") or "180").strip() or "180")
         return phase_max + max(0, margin)
-    return 600
+    return 840
 
 
 # Max wait before marking génération as timed out (aligné scratch / phase2)
 GENERATE_TIMEOUT_S = _resolve_generate_timeout_s()
 # Hint admin affiché pendant la génération (pas le watchdog)
-GENERATE_ETA_HINT = (os.getenv("DEMO_GENERATE_ETA_HINT") or "≈4–7 min").strip() or "≈4–7 min"
+GENERATE_ETA_HINT = (os.getenv("DEMO_GENERATE_ETA_HINT") or "≈5–9 min").strip() or "≈5–9 min"
 try:
     ADMIN_TZ = ZoneInfo(os.getenv("DEMO_ADMIN_TZ", "Europe/Paris"))
 except Exception:  # noqa: BLE001 — tzdata manquant → UTC
