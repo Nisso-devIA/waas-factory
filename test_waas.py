@@ -2552,6 +2552,45 @@ class TestB28HeroStructureVariety(unittest.TestCase):
         self.assertNotIn('id="rdv"', dt.apply_purchased_options(doc, "x", {}))
         self.assertEqual(dt.apply_purchased_options(out, "x", {"rdv": True}).count('id="rdv"'), 1)
 
+    def test_apply_purchased_options_form(self):
+        """Activation : injecte le formulaire avancé (#demande) si l'option "form" est achetée."""
+        import demo_templates as dt
+
+        doc = (
+            '<!DOCTYPE html><html><head></head><body data-plan-slug="x">'
+            '<section id="contact" class="av-contact"><h2>Contact</h2></section>'
+            '<style id="av-devis-bridge">.va-devis{}</style>'
+            '<section class="va-devis" id="devis"><form id="va-form"></form>'
+            '<script src="/demo-assets/devis.js"></script></section>'
+            "</body></html>"
+        )
+        out = dt.apply_purchased_options(doc, "x", {"form": True})
+        self.assertNotIn('id="devis"', out)
+        self.assertIn('id="demande"', out)
+        self.assertIn("/demo-assets/contact.js", out)
+        self.assertNotIn('id="rdv"', out)
+        self.assertLess(out.index('id="demande"'), out.index('id="contact"'))
+        # Accents du formulaire présents dans le template.
+        self.assertIn("Téléphone", dt.FORM_SECTION_TEMPLATE)
+        self.assertIn("Demande envoyée", dt.FORM_SECTION_TEMPLATE)
+        # rdv + form ensemble ; idempotent.
+        both = dt.apply_purchased_options(doc, "x", {"rdv": True, "form": True})
+        self.assertIn('id="rdv"', both)
+        self.assertIn('id="demande"', both)
+        self.assertEqual(
+            dt.apply_purchased_options(both, "x", {"rdv": True, "form": True}).count('id="demande"'),
+            1,
+        )
+
+    def test_rdv_and_devis_accents(self):
+        """Les sections client-facing portent les bons accents (pas de mojibake sans accent)."""
+        import demo_templates as dt
+
+        for needle in ("coordonnées", "créneau", "Téléphone", "Créneau souhaité", "Demande envoyée"):
+            self.assertIn(needle, dt.RDV_SECTION_TEMPLATE)
+        for needle in ("création", "Devis envoyé", "sécurisé", "confirmés"):
+            self.assertIn(needle, dt.DEVIS_SECTION_TEMPLATE)
+
 
 if __name__ == "__main__":
     unittest.main()

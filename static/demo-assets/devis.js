@@ -9,18 +9,18 @@
   var T = { vitrine: { price: 890, pagesIncl: 5, score: 2, minTier: 2 }, ecom: { price: 2490, pagesIncl: 8, score: 5, minTier: 2 } };
   var OPTS = [
     { id: 'rdv', name: 'Prise de rendez-vous', price: 250, score: 2, minTier: 2 },
-    { id: 'blog', name: 'Blog / actualites', price: 200, score: 2, minTier: 2 },
-    { id: 'galerie', name: 'Galerie / realisations', price: 150, score: 1, minTier: 1 },
-    { id: 'form', name: 'Formulaire avance', price: 120, score: 1, minTier: 1 },
+    { id: 'blog', name: 'Blog / actualités', price: 200, score: 2, minTier: 2 },
+    { id: 'galerie', name: 'Galerie / réalisations', price: 150, score: 1, minTier: 1 },
+    { id: 'form', name: 'Formulaire avancé', price: 120, score: 1, minTier: 1 },
     { id: 'avis', name: 'Avis Google', price: 90, score: 1, minTier: 2 },
     { id: 'multi', name: 'Multilingue', price: 300, score: 2, minTier: 2, qty: 'lang' },
     { id: 'espace', name: 'Espace client', price: 400, score: 3, minTier: 3 },
-    { id: 'redac', name: 'Redaction des contenus', price: 60, score: 1, minTier: 1, qty: 'pages' },
-    { id: 'logo', name: 'Logo & identite', price: 350, score: 1, minTier: 1 },
+    { id: 'redac', name: 'Rédaction des contenus', price: 60, score: 1, minTier: 1, qty: 'pages' },
+    { id: 'logo', name: 'Logo & identité', price: 350, score: 1, minTier: 1 },
     { id: 'photos', name: 'Visuels premium', price: 120, score: 1, minTier: 1 }
   ];
-  var TIERS = [{ id: 'essentiel', name: 'Essentiel', price: 29 }, { id: 'visibilite', name: 'Visibilite', price: 49 }, { id: 'croissance', name: 'Croissance', price: 99 }];
-  var LEVELS = [[3, 'Simple'], [7, 'Standard'], [12, 'Avance'], [1e9, 'Premium']];
+  var TIERS = [{ id: 'essentiel', name: 'Essentiel', price: 29 }, { id: 'visibilite', name: 'Visibilité', price: 49 }, { id: 'croissance', name: 'Croissance', price: 99 }];
+  var LEVELS = [[3, 'Simple'], [7, 'Standard'], [12, 'Avancé'], [1e9, 'Premium']];
   var langs = 2;
 
   document.getElementById('va-opts').innerHTML = OPTS.map(function (o) {
@@ -28,7 +28,7 @@
     return '<label class="va-opt"><input type="checkbox" value="' + o.id + '"><span class="va-ck"></span><span class="va-opt-n">' + o.name + '</span><span class="va-opt-p">+' + fmt.format(o.price) + suf + '</span></label>';
   }).join('');
   document.getElementById('va-tiers').innerHTML = TIERS.map(function (t) {
-    var tag = t.id === 'visibilite' ? ' <i>conseille</i>' : '';
+    var tag = t.id === 'visibilite' ? ' <i>conseillé</i>' : '';
     return '<label class="va-tier"><input type="radio" name="tier" value="' + t.id + '"' + (t.id === 'visibilite' ? ' checked' : '') + '><span class="va-tier-n">' + t.name + tag + '</span><span class="va-tier-p">' + fmt.format(t.price) + '<small>/mois</small></span></label>';
   }).join('');
 
@@ -82,6 +82,6 @@
     })
       .then(function (res) { if (!res.ok) throw new Error('http'); return res.json(); })
       .then(function () { root.style.display = 'none'; document.getElementById('va-success').style.display = 'block'; })
-      .catch(function () { btn.disabled = false; btn.textContent = 'Demander mon devis'; alert('Un souci est survenu, reessayez dans un instant.'); });
+      .catch(function () { btn.disabled = false; btn.textContent = 'Demander mon devis'; alert('Un souci est survenu, réessayez dans un instant.'); });
   });
 })();

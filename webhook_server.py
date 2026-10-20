@@ -1194,6 +1194,90 @@ async def api_rdv(slug: str, request: Request):
     )
 
 
+def send_contact_alert(slug: str, site_dir: Path, fields: dict) -> bool:
+    """Notifie l'admin sur Telegram d'une demande via le formulaire avancé (site activé).
+    Même logique que send_rdv_alert : pas d'infra email, l'admin relaie à l'artisan."""
+    if not demo_request.TELEGRAM_BOT_TOKEN or not demo_request.TELEGRAM_CHAT_ID:
+        log.info("Telegram non configuré — demande de contact non envoyée (slug=%s)", slug)
+        return False
+    try:
+        meta = json.loads((site_dir / "meta.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        meta = {}
+    business = meta.get("name") or slug
+    artisan = " / ".join(x for x in (meta.get("phone") or "", meta.get("email") or "") if x)
+    lines = [
+        "✉️ Demande de devis / contact (client d'un site activé)",
+        f"• Site : {business} ({slug})",
+        f"• Client : {fields.get('name')} — {fields.get('phone')}",
+        f"• Email : {fields.get('email')}",
+    ]
+    if fields.get("subject"):
+        lines.append(f"• Objet : {fields.get('subject')}")
+    if fields.get("message"):
+        lines.append(f"• Message : {fields.get('message')}")
+    if artisan:
+        lines.append(f"→ À transmettre à l'artisan : {artisan}")
+    resp = demo_request.telegram_api(
+        "sendMessage", {"chat_id": demo_request.TELEGRAM_CHAT_ID, "text": "\n".join(lines)}
+    )
+    return bool(resp)
+
+
+@app.post("/api/contact/{slug}")
+async def api_contact(slug: str, request: Request):
+    """Un client de l'artisan envoie une demande via le formulaire avancé du site activé.
+    On notifie l'admin sur Telegram (qui relaie à l'artisan — pas d'infra email)."""
+    if not SAFE_SLUG_RE.match(slug):
+        raise HTTPException(status_code=400, detail="Identifiant de site invalide.")
+
+    import demo_limits
+
+    peer = request.client.host if request.client else "unknown"
+    ip = demo_limits.resolve_client_ip(request.headers, peer)
+    if not demo_request.check_rate_limit(f"contact:{ip}"):
+        raise HTTPException(status_code=429, detail="Trop de demandes — réessayez dans un instant.")
+
+    try:
+        raw = await request.json()
+    except Exception:  # noqa: BLE001
+        try:
+            raw = dict(await request.form())
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(status_code=400, detail="Corps JSON requis") from e
+    if not isinstance(raw, dict):
+        raise HTTPException(status_code=400, detail="Payload invalide")
+
+    site_dir = SITES_DIR / slug
+    if not (site_dir / "index.html").exists():
+        raise HTTPException(status_code=404, detail="Site introuvable.")
+
+    def _clean(v: object, n: int) -> str:
+        return " ".join(str(v or "").split())[:n]
+
+    name = _clean(raw.get("name"), 120)
+    phone = _clean(raw.get("phone"), 40)
+    email = _clean(raw.get("email"), 160)
+    subject = _clean(raw.get("subject"), 120)
+    message = _clean(raw.get("message"), 2000)
+    if not name or not phone or not email or not message:
+        raise HTTPException(status_code=400, detail="Nom, téléphone, email et message requis.")
+
+    threading.Thread(
+        target=send_contact_alert,
+        args=(
+            slug,
+            site_dir,
+            {"name": name, "phone": phone, "email": email, "subject": subject, "message": message},
+        ),
+        daemon=True,
+    ).start()
+    return JSONResponse(
+        {"status": "ok", "message": "Votre demande a bien été envoyée."},
+        status_code=201,
+    )
+
+
 @app.post("/webhook/telegram")
 async def telegram_webhook(request: Request):
     """

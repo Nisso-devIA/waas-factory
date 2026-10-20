@@ -492,15 +492,15 @@ DEVIS_SECTION_TEMPLATE = """
       </fieldset>
       <div class="va-estimate">
         <div><span class="va-est-lbl">Estimation</span><span class="va-est-note" id="va-level">-</span></div>
-        <div class="va-est-val"><b id="va-creation">-</b> <small>creation</small> &middot; <b id="va-monthly">-</b><small>/mois</small></div>
+        <div class="va-est-val"><b id="va-creation">-</b> <small>création</small> &middot; <b id="va-monthly">-</b><small>/mois</small></div>
       </div>
       <button type="submit" class="va-btn" id="va-submit">Demander mon devis</button>
-      <p class="va-fine">Devis sans engagement. Montants indicatifs, confirmes avant tout paiement.</p>
+      <p class="va-fine">Devis sans engagement. Montants indicatifs, confirmés avant tout paiement.</p>
     </form>
     <div class="va-success" id="va-success">
       <div class="va-check">&#10003;</div>
-      <h3>Devis envoye !</h3>
-      <p>Merci, nous revenons vers vous tres vite avec le lien d'activation securise.</p>
+      <h3>Devis envoyé !</h3>
+      <p>Merci, nous revenons vers vous très vite avec le lien d'activation sécurisé.</p>
     </div>
   </div>
   <script src="/demo-assets/devis.js?v=20261019a" defer></script>
@@ -546,31 +546,90 @@ RDV_SECTION_TEMPLATE = """
     <div class="va-head">
       <p class="va-eyebrow">Rendez-vous</p>
       <h2>Prendre rendez-vous</h2>
-      <p class="va-sub">Laissez vos coordonnees et un creneau : on vous rappelle pour convenir d'un passage.</p>
+      <p class="va-sub">Laissez vos coordonnées et un créneau : on vous rappelle pour convenir d'un passage.</p>
     </div>
     <form id="va-rdv-form">
       <div class="va-row">
         <div class="va-field"><label for="va-rdv-name">Nom</label><input id="va-rdv-name" name="name" type="text" maxlength="120" required></div>
-        <div class="va-field"><label for="va-rdv-phone">Telephone</label><input id="va-rdv-phone" name="phone" type="tel" maxlength="40" required></div>
+        <div class="va-field"><label for="va-rdv-phone">Téléphone</label><input id="va-rdv-phone" name="phone" type="tel" maxlength="40" required></div>
       </div>
-      <div class="va-field"><label for="va-rdv-slot">Creneau souhaite</label><input id="va-rdv-slot" name="slot" type="text" maxlength="120" placeholder="Ex. cette semaine en matinee"></div>
+      <div class="va-field"><label for="va-rdv-slot">Créneau souhaité</label><input id="va-rdv-slot" name="slot" type="text" maxlength="120" placeholder="Ex. cette semaine en matinée"></div>
       <div class="va-field"><label for="va-rdv-msg">Votre besoin (facultatif)</label><textarea id="va-rdv-msg" name="message" maxlength="1000"></textarea></div>
       <button type="submit" class="va-btn" id="va-rdv-submit">Demander un rendez-vous</button>
       <p class="va-fine">Sans engagement. On vous recontacte rapidement.</p>
     </form>
     <div class="va-success" id="va-rdv-success">
       <div class="va-check">&#10003;</div>
-      <h3>Demande envoyee !</h3>
-      <p>Merci, on vous rappelle tres vite pour fixer le rendez-vous.</p>
+      <h3>Demande envoyée !</h3>
+      <p>Merci, on vous rappelle très vite pour fixer le rendez-vous.</p>
     </div>
   </div>
   <script src="/demo-assets/rdv.js?v=20261020a" defer></script>
 </section>
 """
 
+FORM_SECTION_TEMPLATE = """
+<section class="va-form2" id="demande">
+  <style>
+  .va-form2{--va-accent:var(--av-accent,var(--demo-accent,#0f7a56));--va-ink:var(--av-ink,var(--demo-ink,#16241d));--va-paper:var(--av-paper,var(--demo-paper,#f6f7f4));--va-line:rgba(20,35,28,.16);background:var(--va-paper);color:var(--va-ink);padding:60px 20px;font-family:inherit}
+  .va-form2 *{box-sizing:border-box}
+  .va-form2 .va-wrap{max-width:680px;margin:0 auto}
+  .va-form2 .va-head{text-align:center;margin-bottom:22px}
+  .va-form2 .va-eyebrow{text-transform:uppercase;letter-spacing:.14em;font-size:12px;font-weight:700;color:var(--va-accent);margin:0 0 8px}
+  .va-form2 h2{font-size:clamp(24px,4vw,32px);margin:0 0 10px;font-family:var(--av-font-display,var(--demo-display,inherit))}
+  .va-form2 .va-sub{max-width:48ch;margin:0 auto;opacity:.8;font-size:15px}
+  .va-form2 form{display:grid;gap:12px;margin-top:6px}
+  .va-form2 .va-field label{display:block;font-size:13px;font-weight:600;margin-bottom:4px}
+  .va-form2 input,.va-form2 textarea,.va-form2 select{width:100%;border:1.5px solid var(--va-line);border-radius:10px;padding:12px 13px;font:inherit;background:#fff;color:var(--va-ink)}
+  .va-form2 textarea{min-height:110px;resize:vertical}
+  .va-form2 .va-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:520px){.va-form2 .va-row{grid-template-columns:1fr}}
+  .va-form2 .va-btn{border:0;border-radius:12px;background:var(--va-accent);color:#fff;font-size:16px;font-weight:700;padding:14px;cursor:pointer;font-family:inherit}
+  .va-form2 .va-btn:disabled{opacity:.6;cursor:default}
+  .va-form2 .va-fine{text-align:center;font-size:12px;opacity:.6;margin:2px 0 0}
+  .va-form2 .va-success{display:none;text-align:center;background:#fff;border:1.5px solid var(--va-accent);border-radius:16px;padding:36px 22px;max-width:480px;margin:0 auto}
+  .va-form2 .va-check{width:50px;height:50px;border-radius:50%;background:var(--va-accent);color:#fff;font-size:26px;display:flex;align-items:center;justify-content:center;margin:0 auto 12px}
+  .va-form2 .va-success h3{margin:0 0 6px;font-size:21px}
+  .va-form2 .va-success p{margin:0;opacity:.75}
+  </style>
+  <div class="va-wrap">
+    <div class="va-head">
+      <p class="va-eyebrow">Contact</p>
+      <h2>Demande de devis</h2>
+      <p class="va-sub">Décrivez votre projet : on revient vers vous rapidement avec une réponse personnalisée.</p>
+    </div>
+    <form id="va-form2-form">
+      <div class="va-row">
+        <div class="va-field"><label for="va-form2-name">Nom</label><input id="va-form2-name" name="name" type="text" maxlength="120" required></div>
+        <div class="va-field"><label for="va-form2-phone">Téléphone</label><input id="va-form2-phone" name="phone" type="tel" maxlength="40" required></div>
+      </div>
+      <div class="va-field"><label for="va-form2-email">Email</label><input id="va-form2-email" name="email" type="email" maxlength="160" required></div>
+      <div class="va-field"><label for="va-form2-subject">Objet de la demande</label>
+        <select id="va-form2-subject" name="subject">
+          <option>Demande de devis</option>
+          <option>Dépannage / urgence</option>
+          <option>Prise de rendez-vous</option>
+          <option>Question / autre</option>
+        </select>
+      </div>
+      <div class="va-field"><label for="va-form2-msg">Votre projet</label><textarea id="va-form2-msg" name="message" maxlength="2000" required placeholder="Quelques détails sur ce dont vous avez besoin, l'adresse, les délais…"></textarea></div>
+      <button type="submit" class="va-btn" id="va-form2-submit">Envoyer ma demande</button>
+      <p class="va-fine">Vos informations restent confidentielles et ne servent qu'à vous recontacter.</p>
+    </form>
+    <div class="va-success" id="va-form2-success">
+      <div class="va-check">&#10003;</div>
+      <h3>Demande envoyée !</h3>
+      <p>Merci, nous revenons vers vous très vite au sujet de votre projet.</p>
+    </div>
+  </div>
+  <script src="/demo-assets/contact.js?v=20261020a" defer></script>
+</section>
+"""
+
 # Option -> (template de section, marqueur d'idempotence)
 _OPTION_SECTIONS = {
     "rdv": (RDV_SECTION_TEMPLATE, 'id="rdv"'),
+    "form": (FORM_SECTION_TEMPLATE, 'id="demande"'),
 }
 
 
