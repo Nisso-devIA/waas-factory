@@ -46,22 +46,24 @@ log = logging.getLogger("scratch_site")
 XAI_API_URL = "https://api.x.ai/v1/chat/completions"
 # Wall-clock budget per xAI call (streaming uses this as overall deadline).
 # Phase 2 HTML often needs 3–6 min on grok-4.7 — keep generous defaults.
-SCRATCH_TIMEOUT_S = int(os.getenv("XAI_SCRATCH_TIMEOUT_S") or os.getenv("XAI_TIMEOUT_S") or "420")
+SCRATCH_TIMEOUT_S = int(os.getenv("XAI_SCRATCH_TIMEOUT_S") or os.getenv("XAI_TIMEOUT_S") or "600")
 SCRATCH_PHASE1_TIMEOUT_S = int(os.getenv("XAI_SCRATCH_PHASE1_TIMEOUT_S") or "150")
 SCRATCH_PHASE2_TIMEOUT_S = int(
     os.getenv("XAI_SCRATCH_PHASE2_TIMEOUT_S") or str(SCRATCH_TIMEOUT_S)
 )
-# Idle gap between SSE chunks (grok-4.7 can pause mid-HTML >120s).
+# Idle gap between SSE chunks (grok-4.7 can pause mid-HTML, parfois >200s).
 # Too low → TimeoutError while overall budget still remains (B-21 root cause).
-SCRATCH_STREAM_IDLE_TIMEOUT_S = int(os.getenv("XAI_SCRATCH_STREAM_IDLE_TIMEOUT_S") or "200")
+# 300s : tolère les longues pauses de grok-4.7 pour réduire les secours (sortie inchangée).
+SCRATCH_STREAM_IDLE_TIMEOUT_S = int(os.getenv("XAI_SCRATCH_STREAM_IDLE_TIMEOUT_S") or "300")
 SCRATCH_MAX_ATTEMPTS = int(os.getenv("XAI_SCRATCH_MAX_ATTEMPTS") or "1")  # HTTP tries per call
 SCRATCH_RETRY_BACKOFF_S = (2.0, 4.0)
 SCRATCH_PHASE2_MAX_TOKENS = int(os.getenv("XAI_SCRATCH_PHASE2_MAX_TOKENS") or "2800")
 SCRATCH_PHASE2_RETRY_MAX_TOKENS = int(os.getenv("XAI_SCRATCH_PHASE2_RETRY_MAX_TOKENS") or "2200")
 # Cap phase-1 CSS so phase-2 prompt stays compact (oversized CSS slows HTML gen).
 SCRATCH_CSS_MAX_CHARS = int(os.getenv("XAI_SCRATCH_CSS_MAX_CHARS") or "3200")
-# Whole-generation wall budget (~7 min target including retries).
-SCRATCH_TOTAL_BUDGET_S = int(os.getenv("XAI_SCRATCH_TOTAL_BUDGET_S") or "420")
+# Whole-generation wall budget (~11 min target). Plus de marge pour survivre
+# aux pauses de grok-4.7 SANS grossir la sortie (reste 2800 tokens) → moins de secours.
+SCRATCH_TOTAL_BUDGET_S = int(os.getenv("XAI_SCRATCH_TOTAL_BUDGET_S") or "660")
 DEMO_ASSET_V = os.getenv("DEMO_ASSET_V") or "20261018w"
 
 # Short headings that are OK even if 1–2 words
