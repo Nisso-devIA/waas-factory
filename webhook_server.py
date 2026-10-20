@@ -28,6 +28,7 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 import demo_request
+import demo_templates
 import photo_upload
 import pricing
 import quote_request
@@ -462,6 +463,14 @@ def activate_site_files(site_dir: Path, session_obj: dict) -> str:
             '<meta name="robots" content="noindex, nofollow">',
             '<meta name="robots" content="index, follow">',
         )
+        # Options achetées : retire le configurateur de devis (vente) + injecte les
+        # sections dues (RDV…) d'après meta['quote']['selection']['options'].
+        try:
+            _m = json.loads((site_dir / "meta.json").read_text(encoding="utf-8"))
+            _opts = ((_m.get("quote") or {}).get("selection") or {}).get("options") or {}
+        except (OSError, ValueError):
+            _opts = {}
+        html_text = demo_templates.apply_purchased_options(html_text, slug, _opts)
         atomic_write_text(index_path, html_text)
 
     # 3. Enregistrement du domaine personnalisé (sans écraser celui d'un autre client)
@@ -1102,6 +1111,85 @@ async def api_quote(slug: str, request: Request):
             "id": data["id"],
             "message": "Votre devis a été envoyé. Vous recevrez le lien de paiement après validation.",
         },
+        status_code=201,
+    )
+
+
+def send_rdv_alert(slug: str, site_dir: Path, fields: dict) -> bool:
+    """Notifie l'admin sur Telegram d'une demande de RDV d'un client (site activé).
+    Pas d'infra email pour l'instant : l'admin relaie à l'artisan, dont les
+    coordonnées sont incluses pour faciliter le relais."""
+    if not demo_request.TELEGRAM_BOT_TOKEN or not demo_request.TELEGRAM_CHAT_ID:
+        log.info("Telegram non configuré — demande de RDV non envoyée (slug=%s)", slug)
+        return False
+    try:
+        meta = json.loads((site_dir / "meta.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        meta = {}
+    business = meta.get("name") or slug
+    artisan = " / ".join(x for x in (meta.get("phone") or "", meta.get("email") or "") if x)
+    lines = [
+        "📅 Demande de rendez-vous (client d'un site activé)",
+        f"• Site : {business} ({slug})",
+        f"• Client : {fields.get('name')} — {fields.get('phone')}",
+    ]
+    if fields.get("slot"):
+        lines.append(f"• Créneau souhaité : {fields.get('slot')}")
+    if fields.get("message"):
+        lines.append(f"• Message : {fields.get('message')}")
+    if artisan:
+        lines.append(f"→ À transmettre à l'artisan : {artisan}")
+    resp = demo_request.telegram_api(
+        "sendMessage", {"chat_id": demo_request.TELEGRAM_CHAT_ID, "text": "\n".join(lines)}
+    )
+    return bool(resp)
+
+
+@app.post("/api/rdv/{slug}")
+async def api_rdv(slug: str, request: Request):
+    """Un client de l'artisan demande un RDV depuis le site activé. On notifie l'admin
+    sur Telegram (qui relaie à l'artisan — pas d'infra email pour l'instant)."""
+    if not SAFE_SLUG_RE.match(slug):
+        raise HTTPException(status_code=400, detail="Identifiant de site invalide.")
+
+    import demo_limits
+
+    peer = request.client.host if request.client else "unknown"
+    ip = demo_limits.resolve_client_ip(request.headers, peer)
+    if not demo_request.check_rate_limit(f"rdv:{ip}"):
+        raise HTTPException(status_code=429, detail="Trop de demandes — réessayez dans un instant.")
+
+    try:
+        raw = await request.json()
+    except Exception:  # noqa: BLE001
+        try:
+            raw = dict(await request.form())
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(status_code=400, detail="Corps JSON requis") from e
+    if not isinstance(raw, dict):
+        raise HTTPException(status_code=400, detail="Payload invalide")
+
+    site_dir = SITES_DIR / slug
+    if not (site_dir / "index.html").exists():
+        raise HTTPException(status_code=404, detail="Site introuvable.")
+
+    def _clean(v: object, n: int) -> str:
+        return " ".join(str(v or "").split())[:n]
+
+    name = _clean(raw.get("name"), 120)
+    phone = _clean(raw.get("phone"), 40)
+    slot = _clean(raw.get("slot"), 160)
+    message = _clean(raw.get("message"), 1000)
+    if not name or not phone:
+        raise HTTPException(status_code=400, detail="Nom et téléphone requis.")
+
+    threading.Thread(
+        target=send_rdv_alert,
+        args=(slug, site_dir, {"name": name, "phone": phone, "slot": slot, "message": message}),
+        daemon=True,
+    ).start()
+    return JSONResponse(
+        {"status": "ok", "message": "Votre demande de rendez-vous a bien été envoyée."},
         status_code=201,
     )
 

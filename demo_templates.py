@@ -513,6 +513,105 @@ def _sec_devis(plan: SitePlan, esc) -> str:
     return DEVIS_SECTION_TEMPLATE.replace("{{SLUG}}", esc(plan.slug))
 
 
+# --------------------------------------------------------------------------- #
+# Options achetées (vague 1) : sections injectées dans le site À L'ACTIVATION
+# (option B — on n'écrase pas le design validé, on ajoute les blocs dus).
+# Couleurs auto : --av-* (site scratch) sinon --demo-* (template) sinon secours.
+# --------------------------------------------------------------------------- #
+RDV_SECTION_TEMPLATE = """
+<section class="va-rdv" id="rdv">
+  <style>
+  .va-rdv{--va-accent:var(--av-accent,var(--demo-accent,#0f7a56));--va-ink:var(--av-ink,var(--demo-ink,#16241d));--va-paper:var(--av-paper,var(--demo-paper,#f6f7f4));--va-line:rgba(20,35,28,.16);background:var(--va-paper);color:var(--va-ink);padding:60px 20px;font-family:inherit}
+  .va-rdv *{box-sizing:border-box}
+  .va-rdv .va-wrap{max-width:620px;margin:0 auto}
+  .va-rdv .va-head{text-align:center;margin-bottom:22px}
+  .va-rdv .va-eyebrow{text-transform:uppercase;letter-spacing:.14em;font-size:12px;font-weight:700;color:var(--va-accent);margin:0 0 8px}
+  .va-rdv h2{font-size:clamp(24px,4vw,32px);margin:0 0 10px;font-family:var(--av-font-display,var(--demo-display,inherit))}
+  .va-rdv .va-sub{max-width:46ch;margin:0 auto;opacity:.8;font-size:15px}
+  .va-rdv form{display:grid;gap:12px;margin-top:6px}
+  .va-rdv .va-field label{display:block;font-size:13px;font-weight:600;margin-bottom:4px}
+  .va-rdv input,.va-rdv textarea{width:100%;border:1.5px solid var(--va-line);border-radius:10px;padding:12px 13px;font:inherit;background:#fff;color:var(--va-ink)}
+  .va-rdv textarea{min-height:88px;resize:vertical}
+  .va-rdv .va-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:520px){.va-rdv .va-row{grid-template-columns:1fr}}
+  .va-rdv .va-btn{border:0;border-radius:12px;background:var(--va-accent);color:#fff;font-size:16px;font-weight:700;padding:14px;cursor:pointer;font-family:inherit}
+  .va-rdv .va-btn:disabled{opacity:.6;cursor:default}
+  .va-rdv .va-fine{text-align:center;font-size:12px;opacity:.6;margin:2px 0 0}
+  .va-rdv .va-success{display:none;text-align:center;background:#fff;border:1.5px solid var(--va-accent);border-radius:16px;padding:36px 22px;max-width:480px;margin:0 auto}
+  .va-rdv .va-check{width:50px;height:50px;border-radius:50%;background:var(--va-accent);color:#fff;font-size:26px;display:flex;align-items:center;justify-content:center;margin:0 auto 12px}
+  .va-rdv .va-success h3{margin:0 0 6px;font-size:21px}
+  .va-rdv .va-success p{margin:0;opacity:.75}
+  </style>
+  <div class="va-wrap">
+    <div class="va-head">
+      <p class="va-eyebrow">Rendez-vous</p>
+      <h2>Prendre rendez-vous</h2>
+      <p class="va-sub">Laissez vos coordonnees et un creneau : on vous rappelle pour convenir d'un passage.</p>
+    </div>
+    <form id="va-rdv-form">
+      <div class="va-row">
+        <div class="va-field"><label for="va-rdv-name">Nom</label><input id="va-rdv-name" name="name" type="text" maxlength="120" required></div>
+        <div class="va-field"><label for="va-rdv-phone">Telephone</label><input id="va-rdv-phone" name="phone" type="tel" maxlength="40" required></div>
+      </div>
+      <div class="va-field"><label for="va-rdv-slot">Creneau souhaite</label><input id="va-rdv-slot" name="slot" type="text" maxlength="120" placeholder="Ex. cette semaine en matinee"></div>
+      <div class="va-field"><label for="va-rdv-msg">Votre besoin (facultatif)</label><textarea id="va-rdv-msg" name="message" maxlength="1000"></textarea></div>
+      <button type="submit" class="va-btn" id="va-rdv-submit">Demander un rendez-vous</button>
+      <p class="va-fine">Sans engagement. On vous recontacte rapidement.</p>
+    </form>
+    <div class="va-success" id="va-rdv-success">
+      <div class="va-check">&#10003;</div>
+      <h3>Demande envoyee !</h3>
+      <p>Merci, on vous rappelle tres vite pour fixer le rendez-vous.</p>
+    </div>
+  </div>
+  <script src="/demo-assets/rdv.js?v=20261020a" defer></script>
+</section>
+"""
+
+# Option -> (template de section, marqueur d'idempotence)
+_OPTION_SECTIONS = {
+    "rdv": (RDV_SECTION_TEMPLATE, 'id="rdv"'),
+}
+
+
+def apply_purchased_options(doc: str, slug: str, options: dict) -> str:
+    """À l'activation : retire le configurateur de devis (il sert à VENDRE le site,
+    pas aux clients de l'artisan) et injecte les sections des options achetées.
+    Option B : on n'écrase pas le design validé, on ajoute les blocs. Idempotent."""
+    import html as _html
+    import re as _re
+
+    opts = options or {}
+    # 1. Retirer le configurateur de devis (#devis) + son bridge couleur orphelin
+    doc = _re.sub(r'(?is)<section\b[^>]*\bid="devis".*?</section\s*>', "", doc, count=1)
+    doc = _re.sub(r'(?is)<style\b[^>]*\bid="av-devis-bridge"[^>]*>.*?</style\s*>', "", doc, count=1)
+
+    def _ensure_slug(d: str) -> str:
+        if "data-plan-slug" not in d:
+            attr = f' data-plan-slug="{_html.escape(slug, quote=True)}"'
+            d = _re.sub(r"(?i)<body\b", lambda m: m.group(0) + attr, d, count=1)
+        return d
+
+    def _inject(d: str, section: str, marker: str) -> str:
+        if marker in d:
+            return d  # déjà présent
+        d = _ensure_slug(d)
+        anchor = _re.search(r'(?i)<section\b[^>]*\bid="contact"', d)
+        if anchor:
+            i = anchor.start()
+            return d[:i] + section + "\n" + d[i:]
+        m = _re.search(r"(?i)</body\s*>", d)
+        if m:
+            i = m.start()
+            return d[:i] + section + "\n" + d[i:]
+        return d + section
+
+    for oid, (tpl, marker) in _OPTION_SECTIONS.items():
+        if opts.get(oid):
+            doc = _inject(doc, tpl, marker)
+    return doc
+
+
 _SECTION_RENDERERS = {
     "flagship_split": lambda plan, esc, **kw: _sec_flagship(plan, esc),
     "services_numbered": lambda plan, esc, **kw: _sec_services_numbered(plan, esc),
