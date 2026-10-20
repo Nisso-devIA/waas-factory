@@ -2530,6 +2530,28 @@ class TestB28HeroStructureVariety(unittest.TestCase):
         self.assertEqual(_inject_devis(out, "x").count('id="devis"'), 1)
         self.assertEqual(_inject_devis(doc, ""), doc)
 
+    def test_apply_purchased_options_rdv(self):
+        """Activation : retire le configurateur de devis + injecte la section RDV si achetée."""
+        import demo_templates as dt
+
+        doc = (
+            '<!DOCTYPE html><html><head></head><body data-plan-slug="x">'
+            '<section id="contact" class="av-contact"><h2>Contact</h2></section>'
+            '<style id="av-devis-bridge">.va-devis{}</style>'
+            '<section class="va-devis" id="devis"><form id="va-form"></form>'
+            '<script src="/demo-assets/devis.js"></script></section>'
+            "</body></html>"
+        )
+        out = dt.apply_purchased_options(doc, "x", {"rdv": True})
+        self.assertNotIn('id="devis"', out)
+        self.assertNotIn("av-devis-bridge", out)
+        self.assertIn('id="rdv"', out)
+        self.assertIn("/demo-assets/rdv.js", out)
+        self.assertLess(out.index('id="rdv"'), out.index('id="contact"'))
+        # Sans option : devis retiré, pas de RDV. Idempotent.
+        self.assertNotIn('id="rdv"', dt.apply_purchased_options(doc, "x", {}))
+        self.assertEqual(dt.apply_purchased_options(out, "x", {"rdv": True}).count('id="rdv"'), 1)
+
 
 if __name__ == "__main__":
     unittest.main()
